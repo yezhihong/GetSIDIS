@@ -71,7 +71,7 @@ class Lsidis{
         LHAPDF::PDF * ffs;//pointer to collinear unpolarized FFs
         double XI[NTERMS];//for NLO calculation, ZYE 05/03/2022
         double WI[NTERMS];//for NLO calculation, ZYE 05/03/2022
-        double XX[NTERMS];//for NLO calculation, ZYE 05/03/2022
+        double XX[NTERMS+1];//for NLO calculation, ZYE 05/03/2022
         TLorentzVector Pl;//incoming lepton 
         TLorentzVector Plp;//outgoing lepton
         TLorentzVector Pq;//virtual boson
@@ -150,6 +150,8 @@ class Lsidis{
         int CalculateSigmaTotal(const int mode, const int method, const int precision);//Calculate total cross section within the simulation range [Xmin, Xmax]
         int GibbsStarter(const int mode, const int method);
         double GibbsSampler(const int mode, const int method);//Generate an event with Gibbs sampler
+        int WATE96();
+        double FUUT_NLO(bool bNLO, bool bNeutron);//calculate the NLO structure function F_UU,T
         int CheckIsPhy();
         int Test();
 };/*}}}*/
@@ -672,7 +674,6 @@ int Lsidis::WATE96(){/*{{{*/
        CC**********************************************************************
        */
     double X[48],W[48];
-    const int NTERMS=96;
     /*{{{*/
     X[ 1-1]=   0.01627674484960183561;
     X[ 2-1]=   0.04881298513604856015;
@@ -799,64 +800,43 @@ int Lsidis::WATE96(){/*{{{*/
 }
 /*}}}*/
 
-double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure function F_UU,T {{{
+double Lsidis::FUUT_NLO(bool bNLO=false, bool bNeutron=false){//calculate the NLO structure function F_UU,T {{{
 
     /*Initialization{{{*/
-    const double CF=4.0/3.0,MC=1.43,MB=4.75;
-    //! For initial state partons, pick which PDFs will be contributing to the computation 
-    //(0 for no, 1 for yes). 
-    //The order is: b+bbar, c+cbar, sbar, ubar, dbar, g, d, u, s
-    const int inpdf [9] = {0,0,1,1,1,0,1,1,1};
-
-    double D1_tmp[9],f1_tmp[9], pdf_save[9,96];
-    double fflx_sidis=0.;
+    const double CF=4.0/3.0;
+    double D1_tmp[9],f1_tmp[9], pdf_save[9][96];
+    double fF1x_sidis=0.;
+    double fFLx_sidis=0.;
 
     // nucleon mass and inelasticity, QUESTION: y_inel=y, right? ZYE 05/03/2022
     //double mnuc=(ZDIS*938.27208816/1000.+(ADIS-ZDIS)*939.56542052/
     //        1000.)/(ADIS*1.);
     //double y_inel=Q2/x/(2.*mnuc*ebeam);
 
-    // correct nuMBer to go with the gluon
-    int NF=0; 
-    double FAC=0.0;
-    if (MC*MC/Q2>1){
-        NF=3;
-        FAC=(4.*(inpdf[7]+inpdf[3])
-                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2])/18.;
-    }else if{((MC*MC/Q2.<1.)&&(MB*MB/Q2>1.)){
-        NF=4;
-        FAC=(4.*(inpdf[7]+inpdf[3]+2.*inpdf[1])
-                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2])/18.;
-    }else{
-        NF=5;
-        FAC=(4.*(inpdf[7]+inpdf[3]+2.*inpdf[1])
-                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2]+2.*inpdf[0])/18.;
-    }
-
     if(bNeutron){//in GetPFs(), PDFs were divided by x already, get it back here
-        f1_tmp[0] = x*f1[1] * eu2 * inpdf[5+2];//u
-        f1_tmp[1] = x*f1[0] * ed2 * inpdf[5+1];//d
-        f1_tmp[2] = x*f1[2] * ed2 * inpdf[5+3];//s
-        f1_tmp[3] = x*f1[4] * eu2 * inpdf[5-2];//ubar
-        f1_tmp[4] = x*f1[3] * ed2 * inpdf[5-1];//dbar
-        f1_tmp[5] = x*f1[5] * ed2 * inpdf[5-3];//sbar
-        f1_tmp[6] = x*f1[6] * eu2 * inpdf[5-4];//c+cbar
-        f1_tmp[7] = x*f1[7] * ed2 * inpdf[5-5];//b+bbar
-        f1_tmp[8] = x*f1[8] * inpdf[5+0];//g
+        f1_tmp[0] = x*f1[1] * eu2 ;//u
+        f1_tmp[1] = x*f1[0] * ed2 ;//d
+        f1_tmp[2] = x*f1[2] * ed2 ;//s
+        f1_tmp[3] = x*f1[4] * eu2 ;//ubar
+        f1_tmp[4] = x*f1[3] * ed2 ;//dbar
+        f1_tmp[5] = x*f1[5] * ed2 ;//sbar
+        f1_tmp[6] = x*f1[6] * eu2 ;//c+cbar
+        f1_tmp[7] = x*f1[7] * ed2 ;//b+bbar
+        f1_tmp[8] = x*f1[8] ;//g
     }
     else{
-        f1_tmp[0] = x*f1[0] * eu2 * inpdf[5+2];//u
-        f1_tmp[1] = x*f1[1] * ed2 * inpdf[5+1];//d
-        f1_tmp[2] = x*f1[2] * ed2 * inpdf[5+3];//s
-        f1_tmp[3] = x*f1[3] * eu2 * inpdf[5-2];//ubar
-        f1_tmp[4] = x*f1[4] * ed2 * inpdf[5-1];//dbar
-        f1_tmp[5] = x*f1[5] * ed2 * inpdf[5-3];//sbar
-        f1_tmp[6] = x*f1[6] * eu2 * inpdf[5-4];//c+cbar
-        f1_tmp[7] = x*f1[7] * ed2 * inpdf[5-5];//b+bbar
-        f1_tmp[8] = x*f1[8] * inpdf[5+0];//g
+        f1_tmp[0] = x*f1[0] * eu2 ;//u
+        f1_tmp[1] = x*f1[1] * ed2 ;//d
+        f1_tmp[2] = x*f1[2] * ed2 ;//s
+        f1_tmp[3] = x*f1[3] * eu2 ;//ubar
+        f1_tmp[4] = x*f1[4] * ed2 ;//dbar
+        f1_tmp[5] = x*f1[5] * ed2 ;//sbar
+        f1_tmp[6] = x*f1[6] * eu2 ;//c+cbar
+        f1_tmp[7] = x*f1[7] * ed2 ;//b+bbar
+        f1_tmp[8] = x*f1[8] ;//g
     }
-    if (NF<4){D1[6]=0.;f1_tmp[6]=0.;}
-    if (NF<5){D1[7]=0.;f1_tmp[7]=0.;}
+    f1_tmp[6] = 0.0;
+    f1_tmp[7] = 0.0;
 
     //call alpha_s from LHAPDF
     double AL= pdfs->alphasQ2(Q2);
@@ -865,13 +845,14 @@ double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure 
     /*}}}*/
 
     /* start computing the LO cross-sections{{{*/
-    ff1x_sidis=(f1_tmp[0]*D1[0]+f1_tmp[1]*D1[1]+f1_tmp[2]*D1[2]+f1_tmp[3]*D1[3]+f1_tmp[4]*D1[4]
-              +f1_tmp[5]*D1[5]+f1_tmp[6]*D1[6]+f1_tmp[7]*D1[7]);
+    double fqqbar=(f1_tmp[0]*D1[0]+f1_tmp[1]*D1[1]+f1_tmp[2]*D1[2]+f1_tmp[3]*D1[3]+f1_tmp[4]*D1[4]
+            +f1_tmp[5]*D1[5]+f1_tmp[6]*D1[6]+f1_tmp[7]*D1[7])*z;
+    fF1x_sidis=fqqbar;
     /*}}}*/
 
     // start computing the NLO cross-sections
-    if(bNLO){
-        ff1x_sidis=ff1x_sidis*(1. + AL*CF*(-16.+2.*((7.-6.*z-z*z)/4.+ (-3.+2.*z+z*z)*AL1z/2.+AL1z*AL1z)
+    if(bNLO){/*{{{*/
+        fF1x_sidis=fF1x_sidis*(1. + AL*CF*(-16.+2.*((7.-6.*z-z*z)/4.+ (-3.+2.*z+z*z)*AL1z/2.+AL1z*AL1z)
                 +2.*((7.-6.*x-x*x)/4.+(-3.+2.*x+x*x)*AL1x/2.+AL1x*AL1x)+4.*(AL1x*AL1z)));
 
         for (int i=1;i<NTERMS;i++){/*{{{*/
@@ -879,49 +860,47 @@ double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure 
             double xy=x/ytemp;
 
             if(bNeutron){
-                pdf_save[0,i]= pdfs->xfxQ2(1,  xy, Q2) * eu2 * inpdf[5+2];//u
-                pdf_save[1,i]= pdfs->xfxQ2(2,  xy, Q2) * ed2 * inpdf[5+1];//d
-                pdf_save[2,i]= pdfs->xfxQ2(3,  xy, Q2) * ed2 * inpdf[5+3];//s
-                pdf_save[3,i]= pdfs->xfxQ2(-1, xy, Q2) * eu2 * inpdf[5-2];//ubar
-                pdf_save[4,i]= pdfs->xfxQ2(-2, xy, Q2) * ed2 * inpdf[5-1];//dbar
-                pdf_save[5,i]= pdfs->xfxQ2(-3, xy, Q2) * ed2 * inpdf[5-3];//sbar
-                pdf_save[6,i]= pdfs->xfxQ2(-4, xy, Q2) * eu2 * inpdf[5-4];//c+cbar
-                pdf_save[7,i]= pdfs->xfxQ2(-5, xy, Q2) * ed2 * inpdf[5-5];//b+bbar
-                pdf_save[8,i]= pdfs->xfxQ2(0,  xy, Q2) * inpdf[5+0];//g
+                pdf_save[0][i]= pdfs->xfxQ2(1,  xy, Q2) * eu2;//u
+                pdf_save[1][i]= pdfs->xfxQ2(2,  xy, Q2) * ed2;//d
+                pdf_save[2][i]= pdfs->xfxQ2(3,  xy, Q2) * ed2;//s
+                pdf_save[3][i]= pdfs->xfxQ2(-1, xy, Q2) * eu2;//ubar
+                pdf_save[4][i]= pdfs->xfxQ2(-2, xy, Q2) * ed2;//dbar
+                pdf_save[5][i]= pdfs->xfxQ2(-3, xy, Q2) * ed2;//sbar
+                pdf_save[6][i]= pdfs->xfxQ2(-4, xy, Q2) * eu2;//c+cbar
+                pdf_save[7][i]= pdfs->xfxQ2(-5, xy, Q2) * ed2;//b+bbar
+                pdf_save[8][i]= pdfs->xfxQ2(0,  xy, Q2);//g
             }
             else{
-                pdf_save[0,i]= pdfs->xfxQ2(2,  xy, Q2) * eu2 * inpdf[5+2];//u
-                pdf_save[1,i]= pdfs->xfxQ2(1,  xy, Q2) * ed2 * inpdf[5+1];//d
-                pdf_save[2,i]= pdfs->xfxQ2(3,  xy, Q2) * ed2 * inpdf[5+3];//s
-                pdf_save[3,i]= pdfs->xfxQ2(-2, xy, Q2) * eu2 * inpdf[5-2];//ubar
-                pdf_save[4,i]= pdfs->xfxQ2(-1, xy, Q2) * ed2 * inpdf[5-1];//dbar
-                pdf_save[5,i]= pdfs->xfxQ2(-3, xy, Q2) * ed2 * inpdf[5-3];//sbar
-                pdf_save[6,i]= pdfs->xfxQ2(-4, xy, Q2) * eu2 * inpdf[5-4];//c+cbar
-                pdf_save[7,i]= pdfs->xfxQ2(-5, xy, Q2) * ed2 * inpdf[5-5];//b+bbar
-                pdf_save[8,i]= pdfs->xfxQ2(0,  xy, Q2) * inpdf[5+0];//g
+                pdf_save[0][i]= pdfs->xfxQ2(2,  xy, Q2) * eu2;//u
+                pdf_save[1][i]= pdfs->xfxQ2(1,  xy, Q2) * ed2;//d
+                pdf_save[2][i]= pdfs->xfxQ2(3,  xy, Q2) * ed2;//s
+                pdf_save[3][i]= pdfs->xfxQ2(-2, xy, Q2) * eu2;//ubar
+                pdf_save[4][i]= pdfs->xfxQ2(-1, xy, Q2) * ed2;//dbar
+                pdf_save[5][i]= pdfs->xfxQ2(-3, xy, Q2) * ed2;//sbar
+                pdf_save[6][i]= pdfs->xfxQ2(-4, xy, Q2) * eu2;//c+cbar
+                pdf_save[7][i]= pdfs->xfxQ2(-5, xy, Q2) * ed2;//b+bbar
+                pdf_save[8][i]= pdfs->xfxQ2(0,  xy, Q2);//g
             }
-            if (NF<4) pdf_save[6,i]=0.;
-            if (NF<5) pdf_save[7,i]=0.;
+            pdf_save[6][i] = 0.0;
+            pdf_save[7][i] = 0.0;
+
         }//for(int i=0;i<NTERNS;i++)}}}
 
 
         for(int i=1;i<NTERMS;i++){                 /*{{{*/
             double yz=0.50*(1.0-z)*XI[i]+0.50*(1.0+z);
             double zy=z/yz;
-            AL1=log(1.0-yz);
+            double AL1=log(1.0-yz);
 
-            //CALL FETCH_FF_sidis(zy,Q2,ADIS,IH,IC,inpdf,FTEMPFF)
-            D1_tmp[0] = ffs->xfxQ2(2,  zy, Q2)/z;//u
-            D1_tmp[1] = ffs->xfxQ2(1,  zy, Q2)/z;//d
-            D1_tmp[2] = ffs->xfxQ2(3,  zy, Q2)/z;//s
-            D1_tmp[3] = ffs->xfxQ2(-2, zy, Q2)/z;//ubar
-            D1_tmp[4] = ffs->xfxQ2(-1, zy, Q2)/z;//dbar
-            D1_tmp[5] = ffs->xfxQ2(-3, zy, Q2)/z;//sbar
-            D1_tmp[6] = ffs->xfxQ2(-4, zy, Q2)/z;//c+cbar
-            D1_tmp[7] = ffs->xfxQ2(-5, zy, Q2)/z;//b+bbar
-            D1_tmp[8] = ffs->xfxQ2(0,  zy, Q2)/z;//g
-            if (NF<4) D1_tmp[6]=0.;
-            if (NF<5) D1_tmp[7]=0.;
+            D1_tmp[0] = ffs->xfxQ2(2,  zy, Q2);//u
+            D1_tmp[1] = ffs->xfxQ2(1,  zy, Q2);//d
+            D1_tmp[2] = ffs->xfxQ2(3,  zy, Q2);//s
+            D1_tmp[3] = ffs->xfxQ2(-2, zy, Q2);//ubar
+            D1_tmp[4] = ffs->xfxQ2(-1, zy, Q2);//dbar
+            D1_tmp[5] = ffs->xfxQ2(-3, zy, Q2);//sbar
+            D1_tmp[6] = ffs->xfxQ2(-4, zy, Q2);//c+cbar
+            D1_tmp[7] = ffs->xfxQ2(-5, zy, Q2);//b+bbar
+            D1_tmp[8] = ffs->xfxQ2(0,  zy, Q2);//g
 
             double fqqbarx=f1_tmp[0]*D1_tmp[0]+f1_tmp[1]*D1_tmp[1]+f1_tmp[2]*D1_tmp[2]+f1_tmp[3]*D1_tmp[3]
                           +f1_tmp[4]*D1_tmp[4]+f1_tmp[5]*D1_tmp[5]+f1_tmp[6]*D1_tmp[6]+f1_tmp[7]*D1_tmp[7];
@@ -934,34 +913,34 @@ double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure 
             double C12gq=CF*2.*(yz+(1.+(1.-yz)*(1.-yz))/yz*(log(yz)+AL1));
             double C13gq=CF*2.*AL1x*(1.+(1.-yz)*(1.-yz))/yz;
 
-            ff1x_sidis=ff1x_sidis+.50*(1.0-z)*WI[i]*AL*
+            fF1x_sidis=fF1x_sidis+.50*(1.0-z)*WI[i]*AL*
                 (C12*fqqbarx+C13*(fqqbarx-fqqbar)+C1c*fqqbarx+C1d*(fqqbarx-fqqbar)+(C12gq+C13gq)*fgqx);
 
             for(int j=1;j<NTERMS;j++){/*{{{*/
 
                 double yx=0.50*(1.0-x)*XI[j]+0.50*(1.0+x);
 
-                double fqqbarx=pdf_save[0,j]*D1_tmp[0]+pdf_save[1,j]*D1_tmp[1]+pdf_save[2,j]*D1_tmp[2]
-                              +pdf_save[3,j]*D1_tmp[3]+pdf_save[4,j]*D1_tmp[4]+pdf_save[5,j]*D1_tmp[5]
-                              +pdf_save[6,j]*D1_tmp[6]+pdf_save[7,j]*D1_tmp[7];
-                double fgqx=(pdf_save[0,j]+pdf_save[1,j]+pdf_save[2,j]+pdf_save[3,j]+pdf_save[4,j]
-                            +pdf_save[5,j]+pdf_save[6,j]+pdf_save[7,j])*D1_tmp[8];
-                double fqgx=pdf_save[8,j]*(4.*(D1_tmp[0]+D1_tmp[1]+2.*D1_tmp[6])+D1_tmp[2]+D1_tmp[3]+D1_tmp[4]+D1_tmp[5]+2.*D1_tmp[7])/9.;
+                double fqqbarx=pdf_save[0][j]*D1_tmp[0]+pdf_save[1][j]*D1_tmp[1]+pdf_save[2][j]*D1_tmp[2]
+                              +pdf_save[3][j]*D1_tmp[3]+pdf_save[4][j]*D1_tmp[4]+pdf_save[5][j]*D1_tmp[5]
+                              +pdf_save[6][j]*D1_tmp[6]+pdf_save[7][j]*D1_tmp[7];
+                double fgqx=(pdf_save[0][j]+pdf_save[1][j]+pdf_save[2][j]+pdf_save[3][j]+pdf_save[4][j]
+                            +pdf_save[5][j]+pdf_save[6][j]+pdf_save[7][j])*D1_tmp[8];
+                double fqgx=pdf_save[8][j]*(4.*(D1_tmp[0]+D1_tmp[1]+2.*D1_tmp[6])+D1_tmp[2]+D1_tmp[3]+D1_tmp[4]+D1_tmp[5]+2.*D1_tmp[7])/9.;
 
                 double CLqq=CF*8.*yx*yz;
                 double CLgq=CF*8.*yx*(1.-yz);
                 double CLqg=8.*yx*(1.-yx);
 
-                fflx_sidis=fflx_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI(j)*AL*(CLqq*fqqbarx+CLgq*fgqx+CLqg*fqgx);
+                fFLx_sidis=fFLx_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI[j]*AL*(CLqq*fqqbarx+CLgq*fgqx+CLqg*fqgx);
 
-                double fqqbarxauxx=fqqbarx-(pdf_save[0,j]*D1[0]+pdf_save[1,j]*D1[1]+pdf_save[2,j]*D1[2]
-                        +pdf_save[3,j]*D1[3]+pdf_save[4,j]*D1[4]+pdf_save[5,j]*D1[5]
-                        +pdf_save[6,j]*D1[6]+pdf_save[7,j]*D1[7]);
-                double fqqbarxauxz=fqqbarx-(f1_tmp[0]*D1_tmp[0]+f1_tmp[1]*D1_tmp[1]+pd*D1_tmp[2]
+                double fqqbarxauxx=fqqbarx-(pdf_save[0][j]*D1[0]+pdf_save[1][j]*D1[1]+pdf_save[2][j]*D1[2]
+                        +pdf_save[3][j]*D1[3]+pdf_save[4][j]*D1[4]+pdf_save[5][j]*D1[5]
+                        +pdf_save[6][j]*D1[6]+pdf_save[7][j]*D1[7])*z;
+                double fqqbarxauxz=fqqbarx-(f1_tmp[0]*D1_tmp[0]+f1_tmp[1]*D1_tmp[1]+f1_tmp[2]*D1_tmp[2]
                         +f1_tmp[3]*D1_tmp[3]+f1_tmp[4]*D1_tmp[4]+f1_tmp[5]*D1_tmp[5]
                         +f1_tmp[6]*D1_tmp[6]+f1_tmp[7]*D1_tmp[7]);
                 double fgqxauxz=fgqx-(f1_tmp[0]+f1_tmp[1]+f1_tmp[2]+f1_tmp[3]+f1_tmp[4]+f1_tmp[5]+f1_tmp[6]+f1_tmp[7])*D1_tmp[8];
-                double fqgxauxx=fqgx-pdf_save[8,j]*(4.*(D1[0]+D1[1]+2.*D1[6])+D1[2]+D1[3]+D1[4]+D1[5]+2.*D1[7])/9.;
+                double fqgxauxx=fqgx-pdf_save[8][j]*(4.*(D1[0]+D1[1]+2.*D1[6])+D1[2]+D1[3]+D1[4]+D1[5]+2.*D1[7])*z/9.;
 
                 double C1a=CF*4.*(1.+yx*yz);
                 double C1b=CF*(-2.)*(1.+yx)/(1.-yz);
@@ -972,14 +951,14 @@ double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure 
                 double C12qg=(yx*yx+pow((1.-yx),2))*(1./yz-2.);
                 double C13qg=(yx*yx+pow((1.-yx),2))/(1-yz);
 
-                ff1x_sidis=ff1x_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI(j)*AL*
+                fF1x_sidis=fF1x_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI[j]*AL*
                     (C1a*fqqbarx+C1b*fqqbarxauxx+C1c*fqqbarxauxz+C1d*(-fqqbarx+fqqbarxauxx+fqqbarxauxz+fqqbar)
                      +C12gq*fgqx+C13gq*fgqxauxz+C12qg*fqgx+C13qg*fqgxauxx);
             }//for(int j=0;j<NTERNS;j++)}}}
         }//for(int i=0;i<NTERNS;i++)}}}
-    }//if(bNLO)
+    }//if(bNLO)/*}}}*/
 
-    return fflx_sidis*(1+2.*(1.-y)/(1+pow((1-y),2)));
+    return (fF1x_sidis/z+2.*(1.-y)/(1+pow((1-y),2))*fFLx_sidis/z)/x;
 }/*}}}*/
 
 double Lsidis::FUUT(){//calculate the structure function F_UU,T at current x, z, Q2, Pt{{{
@@ -992,10 +971,15 @@ double Lsidis::FUUT(){//calculate the structure function F_UU,T at current x, z,
         double PhT2 = z * z * TMDpars[0] + TMDpars[1];
         if (Np > 0 && Wp > MXminp){
             FFp = Np * x * (eu2 * (f1[0] * D1[0] + f1[3] * D1[3]) + ed2 * (f1[1] * D1[1] + f1[2] * D1[2] + f1[4] * D1[4] + f1[5] * D1[5])) * exp(-Pt * Pt / PhT2) / (PI * PhT2);
+            double FF_LO = Np * x * FUUT_NLO(false, false);
+            double FF_NLO = Np * x * FUUT_NLO(true, false);
+            cout<<Form("+++ FFp = %f,  FF_LO=%f, FF_NLO=%f", FFp, FF_LO, FF_NLO)<<endl;
         }
         if (Nn > 0 && Wp > MXminn){
             FFn = Nn * x * (eu2 * (f1[1] * D1[0] + f1[4] * D1[3]) + ed2 * (f1[0] * D1[1] + f1[2] * D1[2] + f1[3] * D1[4] + f1[5] * D1[5])) * exp(-Pt * Pt / PhT2) / (PI * PhT2);
-        }
+            double FF_LO = Nn * x * FUUT_NLO(false, true);
+            double FF_NLO = Nn * x * FUUT_NLO(true, true);
+            cout<<Form("--- FFn = %f,  FF_LO=%f, FF_NLO=%f", FFp, FF_LO, FF_NLO)<<endl;        }
     }
     return FFp + FFn;
 }/*}}}*/
