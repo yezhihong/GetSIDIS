@@ -42,7 +42,9 @@ class Lsidis{
         static constexpr double Mpi0 = 0.1349766;//neutral pion mass in GeV
         static constexpr double Mkaon = 0.493677;//charged kaon mass in GeV
         static constexpr double MK0 = 0.497614;//neutral kaon mass in GeV
-        static constexpr double Meta = 0.77526;//rho mass in GeV}}}
+        static constexpr double Meta = 0.77526;//rho mass in GeV
+        static constexpr int NTERMS=96;//for NLO calculation ZYE 05/03/2022}}}
+
     private:/*{{{*/
         bool st_nucleus;
         bool st_pdf;
@@ -67,6 +69,9 @@ class Lsidis{
         int hic;//final hadron charge
         LHAPDF::PDF * pdfs;//pointer to collinear unpolarized PDFs
         LHAPDF::PDF * ffs;//pointer to collinear unpolarized FFs
+        double XI[NTERMS];//for NLO calculation, ZYE 05/03/2022
+        double WI[NTERMS];//for NLO calculation, ZYE 05/03/2022
+        double XX[NTERMS];//for NLO calculation, ZYE 05/03/2022
         TLorentzVector Pl;//incoming lepton 
         TLorentzVector Plp;//outgoing lepton
         TLorentzVector Pq;//virtual boson
@@ -91,8 +96,8 @@ class Lsidis{
         double Rfactor;//a criterism for current fragmentation judgement
         double jacobian;//Jacobian from simulation space to cross section defined space
         bool physics_control;//
-        double f1[6];//PDFs of u, d, s, ubar, dbar, sbar
-        double D1[6];//FFs of u, d, s, ubar, dbar, sbar
+        double f1[9];//PDFs of u, d, s, ubar, dbar, sbar, ccbar,bbbar, gluon, added last three by ZYE 05/03/2022
+        double D1[9];//FFs of u, d, s, ubar, dbar, sbar, ccbar,bbbar, gluon, added last three by ZYE 05/03/2022
         double g1[6];//Polarized PDF of u, d, s, ubar, dbar, sbar
         double h1[6];//Transversity PDF of u, d, s, ubar, dbar, sbar
         double TMDpars[2];//Model parameters of gaussian type TMDs
@@ -102,6 +107,7 @@ class Lsidis{
         double volume;//simulation variables volume
         double sigmatotal;//total cross section within the simulation range [Xmin, Xmax]
         TH1D * Xhisto[6];//for Gibbs sampler}}}
+    
     public:/*{{{*/
         Lsidis();
         Lsidis(const TLorentzVector l, const TLorentzVector P);
@@ -145,8 +151,8 @@ class Lsidis{
         int GibbsStarter(const int mode, const int method);
         double GibbsSampler(const int mode, const int method);//Generate an event with Gibbs sampler
         int CheckIsPhy();
-        int Test();/*}}}*/
-};
+        int Test();
+};/*}}}*/
 
 Lsidis::Lsidis(){//constructor{{{
     st_nucleus = false;
@@ -164,6 +170,8 @@ Lsidis::Lsidis(){//constructor{{{
     Slepton = 0;
     SNL = 0;
     SNT = 0;
+    //for NLO calculation, ZYE 05/03/2022
+    WATE96();
 }/*}}}*/
 
 Lsidis::Lsidis(const TLorentzVector l, const TLorentzVector P){//constructor with initial state{{{
@@ -206,10 +214,10 @@ int Lsidis::CheckNucleus(){//check the status of nucleus{{{
     }
 }/*}}}*/
 
-int Lsidis::CheckIsPhy(){
+int Lsidis::CheckIsPhy(){/*{{{*/
    if(physics_control) return 1;
    else return 0;
-}
+}/*}}}*/
 
 int Lsidis::SetHadron(const char * hadron){//set final hadron{{{
     if (strcmp(hadron, "pi+") == 0){
@@ -617,9 +625,12 @@ int Lsidis::GetPDFs(){//get PDFs of proton at current x, Q2{{{
         f1[3] = pdfs->xfxQ2(-2, x, Q2) / x;
         f1[4] = pdfs->xfxQ2(-1, x, Q2) / x;
         f1[5] = pdfs->xfxQ2(-3, x, Q2) / x;
+        f1[6] =(pdfs->xfxQ2(4, x, Q2)+pdfs->xfxQ2(-4, x, Q2)) / x;
+        f1[7] =(pdfs->xfxQ2(5, x, Q2)+pdfs->xfxQ2(-5, x, Q2)) / x;
+        f1[8] = pdfs->xfxQ2(0, x, Q2) / x;
     }
     else {
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 9; i++)
             f1[i] = 0;
     }
     return 0;
@@ -643,6 +654,332 @@ int Lsidis::GetFFs(){//get FFs to hadron at current z, Q2{{{
             D1[i] = 0;
     }
     return 0;
+}/*}}}*/
+
+int Lsidis::WATE96(){/*{{{*/
+    /*
+       IMPLICIT DOUBLE PRECISION (A-H, O-Z) ! G.W. 15/02/2007
+       CC**********************************************************************
+       CC*****							                                   *****
+       CC***** THE X[i]	AND W[i] ARE THE DIRECT	OUTPUT FROM A PROGRAM  *****
+       CC***** USING NAG ROUTINE D01BCF	TO CALCULATE THE	           *****
+       CC***** GAUSS-LEGENDRE WEIGHTS FOR 96 POINT INTEGRATION.	       *****
+       CC***** THEY AGREE TO TYPICALLY 14 DECIMAL PLACES WITH THE         *****
+       CC***** TABLE IN	ABRAMOWITZ & STEGUN, PAGE 919.		           *****
+       CC*****							                                   *****
+       CC***** ---->   PETER HARRIMAN, APRIL 3RD 1990.	        	       *****
+       CC*****							                                   *****
+       CC**********************************************************************
+       */
+    double X[48],W[48];
+    const int NTERMS=96;
+    /*{{{*/
+    X[ 1-1]=   0.01627674484960183561;
+    X[ 2-1]=   0.04881298513604856015;
+    X[ 3-1]=   0.08129749546442434360;
+    X[ 4-1]=   0.11369585011066471632;
+    X[ 5-1]=   0.14597371465489567682;
+    X[ 6-1]=   0.17809688236761733390;
+    X[ 7-1]=   0.21003131046056591064;
+    X[ 8-1]=   0.24174315616383866556;
+    X[ 9-1]=   0.27319881259104774468;
+    X[10-1]=   0.30436494435449495954;
+    X[11-1]=   0.33520852289262397655;
+    X[12-1]=   0.36569686147231213885;
+    X[13-1]=   0.39579764982890709712;
+    X[14-1]=   0.42547898840729897474;
+    X[15-1]=   0.45470942216774136446;
+    X[16-1]=   0.48345797392059470382;
+    X[17-1]=   0.51169417715466604391;
+    X[18-1]=   0.53938810832435567233;
+    X[19-1]=   0.56651041856139533470;
+    X[20-1]=   0.59303236477757022282;
+    X[21-1]=   0.61892584012546672523;
+    X[22-1]=   0.64416340378496526886;
+    X[23-1]=   0.66871831004391424358;
+    X[24-1]=   0.69256453664216964528;
+    X[25-1]=   0.71567681234896561582;
+    X[26-1]=   0.73803064374439816819;
+    X[27-1]=   0.75960234117664555964;
+    X[28-1]=   0.78036904386743123629;
+    X[29-1]=   0.80030874413913884180;
+    X[30-1]=   0.81940031073792957139;
+    X[31-1]=   0.83762351122818502758;
+    X[32-1]=   0.85495903343459936363;
+    X[33-1]=   0.87138850590929436968;
+    X[34-1]=   0.88689451740241818933;
+    X[35-1]=   0.90146063531585023110;
+    X[36-1]=   0.91507142312089592706;
+    X[37-1]=   0.92771245672230655266;
+    X[38-1]=   0.93937033975275308073;
+    X[39-1]=   0.95003271778443564022;
+    X[40-1]=   0.95968829144874048809;
+    X[41-1]=   0.96832682846326217918;
+    X[42-1]=   0.97593917458513455843;
+    X[43-1]=   0.98251726356301274934;
+    X[44-1]=   0.98805412632962202890;
+    X[45-1]=   0.99254390032376081654;
+    X[46-1]=   0.99598184298720747465;
+    X[47-1]=   0.99836437586317963722;
+    X[48-1]=   0.99968950388322870559;
+    W[ 1-1]=   0.03255061449236316962;
+    W[ 2-1]=   0.03251611871386883307;
+    W[ 3-1]=   0.03244716371406427668;
+    W[ 4-1]=   0.03234382256857594104;
+    W[ 5-1]=   0.03220620479403026124;
+    W[ 6-1]=   0.03203445623199267876;
+    W[ 7-1]=   0.03182875889441101874;
+    W[ 8-1]=   0.03158933077072719007;
+    W[ 9-1]=   0.03131642559686137819;
+    W[10-1]=   0.03101033258631386231;
+    W[11-1]=   0.03067137612366917839;
+    W[12-1]=   0.03029991542082762553;
+    W[13-1]=   0.02989634413632842385;
+    W[14-1]=   0.02946108995816795100;
+    W[15-1]=   0.02899461415055528410;
+    W[16-1]=   0.02849741106508543861;
+    W[17-1]=   0.02797000761684838950;
+    W[18-1]=   0.02741296272602931385;
+    W[19-1]=   0.02682686672559184485;
+    W[20-1]=   0.02621234073567250055;
+    W[21-1]=   0.02557003600534944960;
+    W[22-1]=   0.02490063322248370695;
+    W[23-1]=   0.02420484179236479915;
+    W[24-1]=   0.02348339908592633665;
+    W[25-1]=   0.02273706965832950717;
+    W[26-1]=   0.02196664443874448477;
+    W[27-1]=   0.02117293989219144572;
+    W[28-1]=   0.02035679715433347898;
+    W[29-1]=   0.01951908114014518992;
+    W[30-1]=   0.01866067962741165898;
+    W[31-1]=   0.01778250231604547316;
+    W[32-1]=   0.01688547986424539715;
+    W[33-1]=   0.01597056290256253144;
+    W[34-1]=   0.01503872102699521608;
+    W[35-1]=   0.01409094177231515264;
+    W[36-1]=   0.01312822956696188190;
+    W[37-1]=   0.01215160467108866759;
+    W[38-1]=   0.01116210209983888144;
+    W[39-1]=   0.01016077053500880978;
+    W[40-1]=   0.00914867123078384552;
+    W[41-1]=   0.00812687692569928101;
+    W[42-1]=   0.00709647079115442616;
+    W[43-1]=   0.00605854550423662775;
+    W[44-1]=   0.00501420274292825661;
+    W[45-1]=   0.00396455433844564804;
+    W[46-1]=   0.00291073181793626202;
+    W[47-1]=   0.00185396078894924657;
+    W[48-1]=   0.00079679206555731759;
+    /*}}}*/
+
+    //double XI[96],WI[96], XX[97];
+    for(int i=0; i<48;i++){
+        XI[i]=-X[47-i];
+        WI[i]=W[47-i];
+        XI[i+48]=X[i];
+        WI[i+48]=W[i];
+    }
+
+    for (int i=0;i<96;i++){
+        XX[i]=0.5*(XI[i]+1.);
+    }
+
+    XX[96]=1.0;
+    double EXPON=2.0;//! G.W. 04/07/2007
+    //EXPON=1.50;
+    //     EXPON=3.0;
+    double YI=0.0;
+    for(int i=0;i<96;i++){
+        YI=2.*pow((0.5*(1.+XI[i])),EXPON)-1.;
+        WI[i]=WI[i]/(1.+XI[i])*(1.+YI)*EXPON;
+        XI[i]=YI;
+        XX[i]=0.5*(1.+YI);
+    }
+    return 0;
+}
+/*}}}*/
+
+double Lsidis::FUUT_NLO(bool bNLO, bool bNeutron){//calculate the NLO structure function F_UU,T {{{
+
+    /*Initialization{{{*/
+    const double CF=4.0/3.0,MC=1.43,MB=4.75;
+    //! For initial state partons, pick which PDFs will be contributing to the computation 
+    //(0 for no, 1 for yes). 
+    //The order is: b+bbar, c+cbar, sbar, ubar, dbar, g, d, u, s
+    const int inpdf [9] = {0,0,1,1,1,0,1,1,1};
+
+    double D1_tmp[9],f1_tmp[9], pdf_save[9,96];
+    double fflx_sidis=0.;
+
+    // nucleon mass and inelasticity, QUESTION: y_inel=y, right? ZYE 05/03/2022
+    //double mnuc=(ZDIS*938.27208816/1000.+(ADIS-ZDIS)*939.56542052/
+    //        1000.)/(ADIS*1.);
+    //double y_inel=Q2/x/(2.*mnuc*ebeam);
+
+    // correct nuMBer to go with the gluon
+    int NF=0; 
+    double FAC=0.0;
+    if (MC*MC/Q2>1){
+        NF=3;
+        FAC=(4.*(inpdf[7]+inpdf[3])
+                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2])/18.;
+    }else if{((MC*MC/Q2.<1.)&&(MB*MB/Q2>1.)){
+        NF=4;
+        FAC=(4.*(inpdf[7]+inpdf[3]+2.*inpdf[1])
+                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2])/18.;
+    }else{
+        NF=5;
+        FAC=(4.*(inpdf[7]+inpdf[3]+2.*inpdf[1])
+                +inpdf[6]+inpdf[4]+inpdf[8]+inpdf[2]+2.*inpdf[0])/18.;
+    }
+
+    if(bNeutron){//in GetPFs(), PDFs were divided by x already, get it back here
+        f1_tmp[0] = x*f1[1] * eu2 * inpdf[5+2];//u
+        f1_tmp[1] = x*f1[0] * ed2 * inpdf[5+1];//d
+        f1_tmp[2] = x*f1[2] * ed2 * inpdf[5+3];//s
+        f1_tmp[3] = x*f1[4] * eu2 * inpdf[5-2];//ubar
+        f1_tmp[4] = x*f1[3] * ed2 * inpdf[5-1];//dbar
+        f1_tmp[5] = x*f1[5] * ed2 * inpdf[5-3];//sbar
+        f1_tmp[6] = x*f1[6] * eu2 * inpdf[5-4];//c+cbar
+        f1_tmp[7] = x*f1[7] * ed2 * inpdf[5-5];//b+bbar
+        f1_tmp[8] = x*f1[8] * inpdf[5+0];//g
+    }
+    else{
+        f1_tmp[0] = x*f1[0] * eu2 * inpdf[5+2];//u
+        f1_tmp[1] = x*f1[1] * ed2 * inpdf[5+1];//d
+        f1_tmp[2] = x*f1[2] * ed2 * inpdf[5+3];//s
+        f1_tmp[3] = x*f1[3] * eu2 * inpdf[5-2];//ubar
+        f1_tmp[4] = x*f1[4] * ed2 * inpdf[5-1];//dbar
+        f1_tmp[5] = x*f1[5] * ed2 * inpdf[5-3];//sbar
+        f1_tmp[6] = x*f1[6] * eu2 * inpdf[5-4];//c+cbar
+        f1_tmp[7] = x*f1[7] * ed2 * inpdf[5-5];//b+bbar
+        f1_tmp[8] = x*f1[8] * inpdf[5+0];//g
+    }
+    if (NF<4){D1[6]=0.;f1_tmp[6]=0.;}
+    if (NF<5){D1[7]=0.;f1_tmp[7]=0.;}
+
+    //call alpha_s from LHAPDF
+    double AL= pdfs->alphasQ2(Q2);
+    double AL1x=log(1.-x);
+    double AL1z=log(1.-z);
+    /*}}}*/
+
+    /* start computing the LO cross-sections{{{*/
+    ff1x_sidis=(f1_tmp[0]*D1[0]+f1_tmp[1]*D1[1]+f1_tmp[2]*D1[2]+f1_tmp[3]*D1[3]+f1_tmp[4]*D1[4]
+              +f1_tmp[5]*D1[5]+f1_tmp[6]*D1[6]+f1_tmp[7]*D1[7]);
+    /*}}}*/
+
+    // start computing the NLO cross-sections
+    if(bNLO){
+        ff1x_sidis=ff1x_sidis*(1. + AL*CF*(-16.+2.*((7.-6.*z-z*z)/4.+ (-3.+2.*z+z*z)*AL1z/2.+AL1z*AL1z)
+                +2.*((7.-6.*x-x*x)/4.+(-3.+2.*x+x*x)*AL1x/2.+AL1x*AL1x)+4.*(AL1x*AL1z)));
+
+        for (int i=1;i<NTERMS;i++){/*{{{*/
+            double ytemp=0.50*(1.0-x)*XI[i]+0.50*(1.0+x);
+            double xy=x/ytemp;
+
+            if(bNeutron){
+                pdf_save[0,i]= pdfs->xfxQ2(1,  xy, Q2) * eu2 * inpdf[5+2];//u
+                pdf_save[1,i]= pdfs->xfxQ2(2,  xy, Q2) * ed2 * inpdf[5+1];//d
+                pdf_save[2,i]= pdfs->xfxQ2(3,  xy, Q2) * ed2 * inpdf[5+3];//s
+                pdf_save[3,i]= pdfs->xfxQ2(-1, xy, Q2) * eu2 * inpdf[5-2];//ubar
+                pdf_save[4,i]= pdfs->xfxQ2(-2, xy, Q2) * ed2 * inpdf[5-1];//dbar
+                pdf_save[5,i]= pdfs->xfxQ2(-3, xy, Q2) * ed2 * inpdf[5-3];//sbar
+                pdf_save[6,i]= pdfs->xfxQ2(-4, xy, Q2) * eu2 * inpdf[5-4];//c+cbar
+                pdf_save[7,i]= pdfs->xfxQ2(-5, xy, Q2) * ed2 * inpdf[5-5];//b+bbar
+                pdf_save[8,i]= pdfs->xfxQ2(0,  xy, Q2) * inpdf[5+0];//g
+            }
+            else{
+                pdf_save[0,i]= pdfs->xfxQ2(2,  xy, Q2) * eu2 * inpdf[5+2];//u
+                pdf_save[1,i]= pdfs->xfxQ2(1,  xy, Q2) * ed2 * inpdf[5+1];//d
+                pdf_save[2,i]= pdfs->xfxQ2(3,  xy, Q2) * ed2 * inpdf[5+3];//s
+                pdf_save[3,i]= pdfs->xfxQ2(-2, xy, Q2) * eu2 * inpdf[5-2];//ubar
+                pdf_save[4,i]= pdfs->xfxQ2(-1, xy, Q2) * ed2 * inpdf[5-1];//dbar
+                pdf_save[5,i]= pdfs->xfxQ2(-3, xy, Q2) * ed2 * inpdf[5-3];//sbar
+                pdf_save[6,i]= pdfs->xfxQ2(-4, xy, Q2) * eu2 * inpdf[5-4];//c+cbar
+                pdf_save[7,i]= pdfs->xfxQ2(-5, xy, Q2) * ed2 * inpdf[5-5];//b+bbar
+                pdf_save[8,i]= pdfs->xfxQ2(0,  xy, Q2) * inpdf[5+0];//g
+            }
+            if (NF<4) pdf_save[6,i]=0.;
+            if (NF<5) pdf_save[7,i]=0.;
+        }//for(int i=0;i<NTERNS;i++)}}}
+
+
+        for(int i=1;i<NTERMS;i++){                 /*{{{*/
+            double yz=0.50*(1.0-z)*XI[i]+0.50*(1.0+z);
+            double zy=z/yz;
+            AL1=log(1.0-yz);
+
+            //CALL FETCH_FF_sidis(zy,Q2,ADIS,IH,IC,inpdf,FTEMPFF)
+            D1_tmp[0] = ffs->xfxQ2(2,  zy, Q2)/z;//u
+            D1_tmp[1] = ffs->xfxQ2(1,  zy, Q2)/z;//d
+            D1_tmp[2] = ffs->xfxQ2(3,  zy, Q2)/z;//s
+            D1_tmp[3] = ffs->xfxQ2(-2, zy, Q2)/z;//ubar
+            D1_tmp[4] = ffs->xfxQ2(-1, zy, Q2)/z;//dbar
+            D1_tmp[5] = ffs->xfxQ2(-3, zy, Q2)/z;//sbar
+            D1_tmp[6] = ffs->xfxQ2(-4, zy, Q2)/z;//c+cbar
+            D1_tmp[7] = ffs->xfxQ2(-5, zy, Q2)/z;//b+bbar
+            D1_tmp[8] = ffs->xfxQ2(0,  zy, Q2)/z;//g
+            if (NF<4) D1_tmp[6]=0.;
+            if (NF<5) D1_tmp[7]=0.;
+
+            double fqqbarx=f1_tmp[0]*D1_tmp[0]+f1_tmp[1]*D1_tmp[1]+f1_tmp[2]*D1_tmp[2]+f1_tmp[3]*D1_tmp[3]
+                          +f1_tmp[4]*D1_tmp[4]+f1_tmp[5]*D1_tmp[5]+f1_tmp[6]*D1_tmp[6]+f1_tmp[7]*D1_tmp[7];
+            double fgqx=(f1_tmp[0]+f1_tmp[1]+f1_tmp[2]+f1_tmp[3]+f1_tmp[4]+f1_tmp[5]+f1_tmp[6]+f1_tmp[7])*D1_tmp[8];
+
+            double C12=CF*2.*((1.+yz*yz)*log(yz)/(1.-yz)+(1.-yz));
+            double C13=CF*2.*AL1/(1.-yz)*(1.+yz*yz);
+            double C1c=-2.*CF*AL1x*(1.+yz);
+            double C1d=CF*4.*AL1x/(1.-yz);
+            double C12gq=CF*2.*(yz+(1.+(1.-yz)*(1.-yz))/yz*(log(yz)+AL1));
+            double C13gq=CF*2.*AL1x*(1.+(1.-yz)*(1.-yz))/yz;
+
+            ff1x_sidis=ff1x_sidis+.50*(1.0-z)*WI[i]*AL*
+                (C12*fqqbarx+C13*(fqqbarx-fqqbar)+C1c*fqqbarx+C1d*(fqqbarx-fqqbar)+(C12gq+C13gq)*fgqx);
+
+            for(int j=1;j<NTERMS;j++){/*{{{*/
+
+                double yx=0.50*(1.0-x)*XI[j]+0.50*(1.0+x);
+
+                double fqqbarx=pdf_save[0,j]*D1_tmp[0]+pdf_save[1,j]*D1_tmp[1]+pdf_save[2,j]*D1_tmp[2]
+                              +pdf_save[3,j]*D1_tmp[3]+pdf_save[4,j]*D1_tmp[4]+pdf_save[5,j]*D1_tmp[5]
+                              +pdf_save[6,j]*D1_tmp[6]+pdf_save[7,j]*D1_tmp[7];
+                double fgqx=(pdf_save[0,j]+pdf_save[1,j]+pdf_save[2,j]+pdf_save[3,j]+pdf_save[4,j]
+                            +pdf_save[5,j]+pdf_save[6,j]+pdf_save[7,j])*D1_tmp[8];
+                double fqgx=pdf_save[8,j]*(4.*(D1_tmp[0]+D1_tmp[1]+2.*D1_tmp[6])+D1_tmp[2]+D1_tmp[3]+D1_tmp[4]+D1_tmp[5]+2.*D1_tmp[7])/9.;
+
+                double CLqq=CF*8.*yx*yz;
+                double CLgq=CF*8.*yx*(1.-yz);
+                double CLqg=8.*yx*(1.-yx);
+
+                fflx_sidis=fflx_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI(j)*AL*(CLqq*fqqbarx+CLgq*fgqx+CLqg*fqgx);
+
+                double fqqbarxauxx=fqqbarx-(pdf_save[0,j]*D1[0]+pdf_save[1,j]*D1[1]+pdf_save[2,j]*D1[2]
+                        +pdf_save[3,j]*D1[3]+pdf_save[4,j]*D1[4]+pdf_save[5,j]*D1[5]
+                        +pdf_save[6,j]*D1[6]+pdf_save[7,j]*D1[7]);
+                double fqqbarxauxz=fqqbarx-(f1_tmp[0]*D1_tmp[0]+f1_tmp[1]*D1_tmp[1]+pd*D1_tmp[2]
+                        +f1_tmp[3]*D1_tmp[3]+f1_tmp[4]*D1_tmp[4]+f1_tmp[5]*D1_tmp[5]
+                        +f1_tmp[6]*D1_tmp[6]+f1_tmp[7]*D1_tmp[7]);
+                double fgqxauxz=fgqx-(f1_tmp[0]+f1_tmp[1]+f1_tmp[2]+f1_tmp[3]+f1_tmp[4]+f1_tmp[5]+f1_tmp[6]+f1_tmp[7])*D1_tmp[8];
+                double fqgxauxx=fqgx-pdf_save[8,j]*(4.*(D1[0]+D1[1]+2.*D1[6])+D1[2]+D1[3]+D1[4]+D1[5]+2.*D1[7])/9.;
+
+                double C1a=CF*4.*(1.+yx*yz);
+                double C1b=CF*(-2.)*(1.+yx)/(1.-yz);
+                double C1c=CF*(-2.)*(1.+yz)/(1.-yx);
+                double C1d=CF*4./(1.-yx)/(1.-yz);
+                double C12gq=CF*2.*(2.*(1.+yx-yx*yz)-(1.+yx)/yz);
+                double C13gq=CF*2.*(1.+pow((1.-yz),2))/yz/(1.-yx);
+                double C12qg=(yx*yx+pow((1.-yx),2))*(1./yz-2.);
+                double C13qg=(yx*yx+pow((1.-yx),2))/(1-yz);
+
+                ff1x_sidis=ff1x_sidis+0.5*(1.0-x)*0.5*(1.0-z)*WI[i]*WI(j)*AL*
+                    (C1a*fqqbarx+C1b*fqqbarxauxx+C1c*fqqbarxauxz+C1d*(-fqqbarx+fqqbarxauxx+fqqbarxauxz+fqqbar)
+                     +C12gq*fgqx+C13gq*fgqxauxz+C12qg*fqgx+C13qg*fqgxauxx);
+            }//for(int j=0;j<NTERNS;j++)}}}
+        }//for(int i=0;i<NTERNS;i++)}}}
+    }//if(bNLO)
+
+    return fflx_sidis*(1+2.*(1.-y)/(1+pow((1-y),2)));
 }/*}}}*/
 
 double Lsidis::FUUT(){//calculate the structure function F_UU,T at current x, z, Q2, Pt{{{
